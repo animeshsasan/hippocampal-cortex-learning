@@ -1,0 +1,3 @@
+.vscode
+.mypy*
+__pycache__

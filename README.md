@@ -1,1 +1,1 @@
-# hippocampal-cortex-learning
+# Hippocampal Cortex Learning
