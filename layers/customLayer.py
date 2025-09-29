@@ -5,6 +5,8 @@ from torch.nn.functional import linear
 from torch import Tensor
 import math
 
+from layers.customLinearLayer import CustomLinearLayer
+
 
 class CustomLayer(nn.Module):
     def __init__(self, 
@@ -15,14 +17,8 @@ class CustomLayer(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
 
-        self.weight = nn.Parameter(torch.empty(out_features, in_features))
-        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5)) 
-
-        self.bias = nn.Parameter(torch.empty((out_features)))
-        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
-        bound = 1 / math.sqrt(fan_in)
-        nn.init.uniform_(self.bias, -bound, bound)
-
+        self.linear = CustomLinearLayer(self.in_features, self.out_features)
+        
         self.out_features_allowed = out_features_allowed
         self.activation = nn.LeakyReLU(0.1)
         
@@ -31,7 +27,7 @@ class CustomLayer(nn.Module):
         """
         input: (batch_size, in_features)
         """
-        outputs = linear(input, self.weight, self.bias)
+        outputs = self.linear(input)
 
         if self.activation is not None:
             outputs = self.activation(outputs)
