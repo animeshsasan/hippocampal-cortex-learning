@@ -5,9 +5,8 @@ import torch.nn as nn
 
 
 class RunExperiment():
-    def __init__(self, trainUtil: TrainUtil, in_features: int):
+    def __init__(self, trainUtil: TrainUtil):
         self.trainUtil = trainUtil
-        self.in_features = in_features
 
     def perform_one_experiment(self,
                                models: dict[str, Callable], 
