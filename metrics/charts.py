@@ -67,7 +67,7 @@ class ChartUtil():
         self.data[TRAIN] = train_data
 
 
-    def plot_training_data_for(self, value_to_plot = "loss", models = None, run = None, width_alpha = 0.3, height_alpha = 0.3):
+    def plot_training_data_for(self, value_to_plot = "loss", models = None, run = None, width_alpha = 0.3, height_alpha = 0.3, no_std = False):
         assert TRAIN in self.data
         if value_to_plot == "loss":
             value_to_plot = TrainingCharts.LOSS
@@ -90,7 +90,10 @@ class ChartUtil():
                     mean_acc.append(np.mean(train_data[epoch][value_to_plot]))
                     std_acc.append(np.std(train_data[epoch][value_to_plot]))
 
-                ax.errorbar(epochs, mean_acc, std_acc, label=model)
+                if no_std:
+                    ax.plot(epochs, mean_acc, label=model)
+                else:
+                    ax.errorbar(epochs, mean_acc, std_acc, label=model)
             else:
                 epochs = []
                 acc = []
@@ -129,7 +132,7 @@ class ChartUtil():
         test_data[model][TestCharts.VAL_ACC].append(val_accuracy)
         self.data[TEST] = test_data
 
-    def plot_test_accu_for_models(self, models = None, width_alpha = 1):
+    def plot_test_accu_for_models(self, models = None, width_alpha = 1, no_std = False):
         assert TEST in self.data
 
         model_name = []
@@ -150,8 +153,12 @@ class ChartUtil():
 
         fig, ax = self.get_plot(models, width_alpha=width_alpha)
 
-        ax.errorbar(model_name, tr_mean, tr_variance, color='r', fmt='o', label="Train Accuracy")    
-        ax.errorbar(model_name, t_mean, t_variance, color='g', fmt='o', label="Val Accuracy")    
+        if no_std:
+            ax.plot(model_name, tr_mean, 'ro', label="Train Accuracy")
+            ax.plot(model_name, t_mean, 'go', label="Val Accuracy")
+        else:
+            ax.errorbar(model_name, tr_mean, tr_variance, color='r', fmt='o', label="Train Accuracy")    
+            ax.errorbar(model_name, t_mean, t_variance, color='g', fmt='o', label="Val Accuracy")    
         ax.set_xlabel("Model")
         ax.set_ylabel("Accuracy")
         ax.legend()

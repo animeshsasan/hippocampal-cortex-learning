@@ -16,8 +16,16 @@ class XOR():
 
         if unique:
             split_size = max(int(len(X)*split_percent), 1)
-            X_train, y_train = X[:split_size], y[:split_size]
-            X_val, y_val = X[split_size:], y[split_size:]
+
+            n_samples = X.shape[0]
+            indices = np.random.permutation(n_samples)
+    
+            train_idx = indices[:split_size]
+            val_idx = indices[split_size:]
+            
+            X_train, y_train = X[train_idx], y[train_idx]
+            X_val, y_val = X[val_idx], y[val_idx]
+            
             return X_train, y_train, X_val, y_val
         else:
             return X, y, X, y
