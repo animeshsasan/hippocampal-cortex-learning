@@ -18,7 +18,8 @@ class RunExperiment():
                                layers = 3, 
                                model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)},
                                print_summary = False,
-                               batch_train = False) -> ChartUtil:
+                               batch_train = False,
+                               random_sequencing = True) -> ChartUtil:
         chartUtil = ChartUtil()
         epoch_num = n_epochs
         for _ in range(n_runs):
@@ -31,15 +32,53 @@ class RunExperiment():
                                                                                                                                 name = modelName,
                                                                                                                                 print_msg = print_summary,
                                                                                                                                 batch_train = batch_train,
-                                                                                                                                ortho_lambda = ortho_lambda)
+                                                                                                                                ortho_lambda = ortho_lambda,
+                                                                                                                                random_sequencing = random_sequencing)
 
                 else:
                     loss_over_epochs, accuracy_over_epochs, epoch_numbers, train_accuracy, val_accuracy = self.trainUtil.train_and_evaluate(model, 
                                                                                                                                 epochs = epoch_num, 
                                                                                                                                 name = modelName,
                                                                                                                                 print_msg = print_summary,
-                                                                                                                                batch_train = batch_train)
+                                                                                                                                batch_train = batch_train,
+                                                                                                                                random_sequencing = random_sequencing)
                 chartUtil.add_train_data(modelName, loss_over_epochs, accuracy_over_epochs, epoch_numbers)
                 chartUtil.add_test_data(modelName, train_accuracy, val_accuracy)
         
         return chartUtil
+    
+    def train_models(self,
+                     models: dict[str, Callable],
+                     n_epochs = 41,
+                     ortho_lambda = 0.1,
+                     in_features = 2, 
+                     out_features = 2, 
+                     layers = 3, 
+                     model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)},
+                     print_summary = False,
+                     batch_train = False,
+                     random_sequencing = True):
+        modelResults = {}
+        for modelName, get_model in models.items():
+            model = get_model(in_features = in_features, out_features = out_features, layers = layers, model_params = model_params)
+
+            if ortho_lambda and "Ortho" in modelName:
+                self.trainUtil.train_and_evaluate(model, 
+                                                epochs = n_epochs, 
+                                                name = modelName,
+                                                print_msg = print_summary,
+                                                batch_train = batch_train,
+                                                ortho_lambda = ortho_lambda,
+                                                random_sequencing = random_sequencing)
+
+            else:
+                self.trainUtil.train_and_evaluate(model, 
+                                                epochs = n_epochs, 
+                                                name = modelName,
+                                                print_msg = print_summary,
+                                                batch_train = batch_train,
+                                                random_sequencing = random_sequencing)
+                
+            modelResults[modelName] = model
+        
+        return modelResults

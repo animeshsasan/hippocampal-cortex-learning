@@ -1,4 +1,5 @@
 from __future__ import annotations
+from matplotlib import cm
 import matplotlib.pyplot as plt
 import numpy as np
 from enum import Enum
@@ -18,6 +19,7 @@ class TestCharts(Enum):
 
 class ChartUtil():
     def __init__(self, data = None):
+        self.colorsMap = {}
         if data is not None:
             self.data = data
         else:
@@ -65,9 +67,27 @@ class ChartUtil():
             n_values += 1
 
         self.data[TRAIN] = train_data
+    
+    def set_colors_map(self):
+        colors = cm.get_cmap('tab20', len(self.get_models()))
+        for i, modelName in enumerate(self.get_models()):
+            self.colorsMap[modelName] = colors(i)
 
+    def get_colors_map(self, models):
+        colors = cm.get_cmap('tab20', len(models))
+        colorsMap = {}
+        for i, modelName in enumerate(models):
+            colorsMap[modelName] = colors(i)
+        return colorsMap
 
-    def plot_training_data_for(self, value_to_plot = "loss", models = None, run = None, width_alpha = 0.3, height_alpha = 0.3, no_std = False):
+    def plot_training_data_for(self,
+                               value_to_plot = "loss", 
+                               models = None, 
+                               run = None, 
+                               width_alpha = 0.3, 
+                               height_alpha = 0.3, 
+                               no_std = False,
+                               set_unique_colors = False):
         assert TRAIN in self.data
         if value_to_plot == "loss":
             value_to_plot = TrainingCharts.LOSS
@@ -75,6 +95,12 @@ class ChartUtil():
             value_to_plot  = TrainingCharts.ACC
 
         fig, ax = self.get_plot(models, width_alpha = width_alpha, height_alpha = height_alpha)
+
+        if set_unique_colors:
+            colorMapForModels = models if models is not None else self.get_models()
+            colorsMap = self.get_colors_map(colorMapForModels)
+        else:
+            colorsMap = self.colorsMap
 
         for model in self.data[TRAIN]:
             if models is not None and model not in models:
@@ -91,9 +117,9 @@ class ChartUtil():
                     std_acc.append(np.std(train_data[epoch][value_to_plot]))
 
                 if no_std:
-                    ax.plot(epochs, mean_acc, label=model)
+                    ax.plot(epochs, mean_acc, label=model, color = colorsMap[model])
                 else:
-                    ax.errorbar(epochs, mean_acc, std_acc, label=model)
+                    ax.errorbar(epochs, mean_acc, std_acc, label=model, color = colorsMap[model])
             else:
                 epochs = []
                 acc = []

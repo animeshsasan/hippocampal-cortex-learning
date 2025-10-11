@@ -14,7 +14,7 @@ class ModelSetups():
             def __init__(self, in_features=in_features, out_features=out_features):
                 super().__init__()
                 self.layers = nn.ModuleList()
-                self.layer_names = list(model_params.keys())
+                self.layer_names = list()
 
                 # First layer: input → first hidden
                 prev_out = in_features
@@ -47,7 +47,7 @@ class ModelSetups():
             def __init__(self, in_features=in_features, out_features=out_features):
                 super().__init__()
                 self.layers = nn.ModuleList()
-                self.layer_names = list(model_params.keys())
+                self.layer_names = list()
 
                 # First layer: input → first hidden
                 prev_out = in_features
@@ -80,7 +80,7 @@ class ModelSetups():
             def __init__(self, in_features=in_features, out_features=out_features):
                 super().__init__()
                 self.layers = nn.ModuleList()
-                self.layer_names = list(model_params.keys())
+                self.layer_names = list()
 
                 # First layer: input → first hidden
                 prev_out = in_features
