@@ -93,7 +93,10 @@ class TrainUtil():
                     print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
                 loss_over_epochs.append(loss.item())
                 epoch_number.append(epoch)
-                accuracy_over_epochs.append(get_accuracy(model, self.X_train, self.y_train)*100)
+                accuracy = get_accuracy(model, self.X_train, self.y_train)*100
+                accuracy_over_epochs.append(accuracy)
+                if accuracy == 100:
+                    break
         return loss_over_epochs, accuracy_over_epochs, epoch_number
     
     def set_data_granularity(self, granularity):
