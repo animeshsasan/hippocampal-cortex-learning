@@ -5,21 +5,17 @@ import numpy as np
 from enum import Enum
 import uuid
 
+from models.enums.chartType import TrainingCharts
+from models.trainingAnalysis.experimentResults import ExperimentResults
+
 TEST = "test"
 TRAIN = "train"
 
 
-class TrainingCharts(Enum):
-    LOSS = "loss_while_training"
-    ACC = "acc_while_training"
-
-class TestCharts(Enum):
-    TRAIN_ACC = "train_acc"
-    VAL_ACC = "val_acc"
-
 class ChartUtil():
     def __init__(self, data = None):
         self.colorsMap = {}
+        self.results = ExperimentResults()
         if data is not None:
             self.data = data
         else:
@@ -46,7 +42,7 @@ class ChartUtil():
         else:
             return []
     
-    def add_train_data(self, model, loss_values, accuracy_over_epochs, epoch_numbers):
+    def add_train_data(self, model, loss_values, train_accuracy_over_epochs, epoch_numbers, test_accuracy_over_epochs):
         if TRAIN in self.data:
             train_data = self.data[TRAIN]
         else:
@@ -60,13 +56,23 @@ class ChartUtil():
             if epoch not in train_data[model]:
                 train_data[model][epoch] = {}
                 train_data[model][epoch][TrainingCharts.LOSS] = []
-                train_data[model][epoch][TrainingCharts.ACC] = []
+                train_data[model][epoch][TrainingCharts.TRAIN_ACC] = []
+                train_data[model][epoch][TrainingCharts.VAL_ACC] = []
             
             train_data[model][epoch][TrainingCharts.LOSS].append(loss_values[n_values])
-            train_data[model][epoch][TrainingCharts.ACC].append(accuracy_over_epochs[n_values])
+            train_data[model][epoch][TrainingCharts.TRAIN_ACC].append(train_accuracy_over_epochs[n_values])
+            train_data[model][epoch][TrainingCharts.VAL_ACC].append(test_accuracy_over_epochs[n_values])
             n_values += 1
-
         self.data[TRAIN] = train_data
+
+        model_data = self.results.get_or_create_training_model(model)
+        model_data.add_multiple_epoch_data(
+            epochs=epoch_numbers,
+            loss_values=loss_values,
+            train_acc_values=train_accuracy_over_epochs,
+            val_acc_values=test_accuracy_over_epochs
+        )
+
     
     def set_colors_map(self):
         colors = cm.get_cmap('tab20', len(self.get_models()))
@@ -81,7 +87,7 @@ class ChartUtil():
         return colorsMap
 
     def plot_training_data_for(self,
-                               value_to_plot = "loss", 
+                               value_to_plot = TrainingCharts.LOSS, 
                                models = None, 
                                run = None, 
                                width_alpha = 0.3, 
@@ -89,10 +95,6 @@ class ChartUtil():
                                no_std = False,
                                set_unique_colors = False):
         assert TRAIN in self.data
-        if value_to_plot == "loss":
-            value_to_plot = TrainingCharts.LOSS
-        else:
-            value_to_plot  = TrainingCharts.ACC
 
         fig, ax = self.get_plot(models, width_alpha = width_alpha, height_alpha = height_alpha)
 
@@ -101,6 +103,34 @@ class ChartUtil():
             colorsMap = self.get_colors_map(colorMapForModels)
         else:
             colorsMap = self.colorsMap
+
+        # for model, model_data in self.results.train_data.items():
+        #     if models is not None and model not in models:
+        #         continue
+        #     epochs = model.get_epoch_numbers()
+
+        #     if run is None:
+        #         mean_acc = []
+        #         std_acc = []
+        #         for epoch in model_data.epochs:
+        #             epoch_data = model_data.epochs[epoch]
+                    
+        #             mean, std = epoch_data[epoch].get_value_mean_std_by_type(value_to_plot)
+        #             mean_acc.append(mean)
+        #             std_acc.append(std)
+
+        #         if no_std:
+        #             ax.plot(epochs, mean_acc, label=model, color = colorsMap[model])
+        #         else:
+        #             ax.errorbar(epochs, mean_acc, std_acc, label=model, color = colorsMap[model])
+        #     else:
+        #         acc = []
+        #         for epoch in model_data.epochs:
+        #             epoch_data = model_data.epochs[epoch]
+        #             acc_value = epoch_data.get_value(value_to_plot, run)
+        #             acc.append(acc_value)
+                
+        #         ax.plot(epochs, acc, label=model)
 
         for model in self.data[TRAIN]:
             if models is not None and model not in models:
@@ -135,8 +165,11 @@ class ChartUtil():
         if value_to_plot == TrainingCharts.LOSS:
             title = "Loss vs Epoch during training"
             ax.set_ylabel("Loss")
+        elif value_to_plot == TrainingCharts.VAL_ACC:
+            title = "Val Accuracy vs Epoch during training"
+            ax.set_ylabel("Accuracy")
         else:
-            title = "Accuracy vs Epoch during training"
+            title = "Train Accuracy vs Epoch during training"
             ax.set_ylabel("Accuracy")
         ax.set_title(title)
         return fig
@@ -158,6 +191,9 @@ class ChartUtil():
         test_data[model][TestCharts.VAL_ACC].append(val_accuracy)
         self.data[TEST] = test_data
 
+        model_test_data = self.results.get_or_create_test_model(model)
+        model_test_data.add_test_data(train_accuracy, val_accuracy)
+
     def plot_test_accu_for_models(self, models = None, width_alpha = 1, no_std = False):
         assert TEST in self.data
 
@@ -176,6 +212,18 @@ class ChartUtil():
             t_mean.append(np.mean(test_data[TestCharts.VAL_ACC]))
             tr_variance.append(np.std(test_data[TestCharts.TRAIN_ACC]))    
             t_variance.append(np.std(test_data[TestCharts.VAL_ACC]))
+        
+        # for model, model_data in self.results.test_data.items():
+        #     if models is not None and model not in models:
+        #         continue
+           
+        #     model_name.append(model)
+        #     train_mean, train_std = model_data.get_train_mean_std()
+        #     val_mean, val_std = model_data.get_val_mean_std()
+        #     tr_mean.append(train_mean)
+        #     t_mean.append(val_mean)
+        #     tr_variance.append(train_std)    
+        #     t_variance.append(val_std)
 
         fig, ax = self.get_plot(models, width_alpha=width_alpha)
 
