@@ -108,6 +108,13 @@ class TrainUtil():
     
     def get_train_accuracy(self, model):
         return get_accuracy(model, self.X_train, self.y_train)*100
+    
+    def get_mismatched_indices(self, model):
+        with torch.no_grad():
+            outputs = model(self.X_val)
+            predicted = torch.argmax(outputs, 1)
+            mismatched_indices = (predicted != self.y_val).nonzero(as_tuple=True)[0]
+        return mismatched_indices
 
     def train_and_evaluate(self, 
                            model,  
