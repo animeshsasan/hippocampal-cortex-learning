@@ -3,6 +3,8 @@ from typing import List
 
 import numpy as np
 
+from metrics.bootstrapUtils import get_bootstrapped_value
+
 
 @dataclass
 class ModelTestData:
@@ -22,3 +24,11 @@ class ModelTestData:
     def get_val_mean_std(self):
         """Get mean and std of training accuracies"""
         return np.mean(self.val_acc), np.std(self.val_acc)
+
+    def get_val_mean_bootstrapped(self):
+        bt_l, bt_u = get_bootstrapped_value(self.val_acc)
+        return np.mean(self.val_acc), bt_l, bt_u
+
+    def get_train_mean_bootstrapped(self):
+        bt_l, bt_u = get_bootstrapped_value(self.train_acc)
+        return np.mean(self.train_acc), bt_l, bt_u

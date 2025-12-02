@@ -1,26 +1,25 @@
 import torch
 import torch.nn as nn
-import torch.nn.utils.parametrizations as P
-from torch.nn.functional import linear
 from torch import Tensor
-import math
 
-from layers.customLinearLayer import CustomLinearLayer
+# from layers.customLinearLayer import CustomLinearLayer
 
 
 class CustomLayer(nn.Module):
     def __init__(self, 
                 in_features, 
                 out_features, 
-                out_features_allowed = None):
+                out_features_allowed = None,
+                activation = nn.LeakyReLU(0.1)):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 
-        self.linear = CustomLinearLayer(self.in_features, self.out_features)
+        self.linear = nn.Linear(self.in_features, self.out_features)
         
         self.out_features_allowed = out_features_allowed
-        self.activation = nn.LeakyReLU(0.1)
+        # self.activation = nn.LeakyReLU(0.1)
+        self.activation = activation
         
 
     def forward(self, input: Tensor) -> Tensor:

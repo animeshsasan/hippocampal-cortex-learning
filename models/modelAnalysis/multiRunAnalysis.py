@@ -1,7 +1,8 @@
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
+from numpy import ndarray
 import torch
 
 from metrics.chartSparseAnalysis import ChartSparseUtil
@@ -24,7 +25,11 @@ class MultiRunAnalysis:
             self.models[model_name] = ModelAnalysis(model_name)
         return self.models[model_name]
     
-    def add_run_test_data(self, test_activations: Dict[str, Dict[str, torch.Tensor]]):
+    def add_run_test_data(self, 
+                          test_activations: Dict[str, Dict[str, torch.Tensor]],
+                          compute_witihin_btw_sim_avg: Callable[..., tuple[float, float, float]],
+                          compute_witihin_btw_sim_abs: Callable[..., tuple[dict[str, float], dict[str, float]]],
+                          **kwargs):
         """Add data from a single run to the analysis"""
         for model_name, layer_data in test_activations.items():
             model_analysis = self.get_or_create_model(model_name)
@@ -33,8 +38,8 @@ class MultiRunAnalysis:
                 # Compute similarities
                 num_inputs = activations.shape[0]
                 cosine_sim_matrix = self.chart_util.get_cosine_similarity_matrix(activations, num_inputs)
-                within_sim, between_sim, complete_sim = self.chart_util.compute_within_between_similarity_avg(cosine_sim_matrix, num_inputs)
-                within_sim_abs, between_sim_abs = self.chart_util.compute_within_between_similarity_absolute(cosine_sim_matrix)
+                within_sim, between_sim, complete_sim = compute_witihin_btw_sim_avg(cosine_sim_matrix, num_inputs, **kwargs)
+                within_sim_abs, between_sim_abs = compute_witihin_btw_sim_abs(cosine_sim_matrix, **kwargs)
                 
                 separation_value = 1 - between_sim
                 
@@ -51,8 +56,28 @@ class MultiRunAnalysis:
                     similarity_result=similarity_result,
                     activations=activations
                 )
-    
-    def add_run_train_data(self, train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]]):
+
+    def add_run_test_data_xor(self, test_activations: Dict[str, Dict[str, torch.Tensor]]):
+        self.add_run_test_data(
+            test_activations,
+            compute_witihin_btw_sim_avg=self.chart_util.compute_within_between_similarity_avg_for_xor,
+            compute_witihin_btw_sim_abs=self.chart_util.compute_within_between_similarity_absolute_for_xor
+        )
+
+    def add_run_test_data_dummy(self, test_activations: Dict[str, Dict[str, torch.Tensor]], inputs: torch.Tensor, outputs: torch.Tensor):
+        self.add_run_test_data(
+            test_activations,
+            compute_witihin_btw_sim_avg = self.chart_util.compute_within_between_similarity_avg_for_dummy,
+            compute_witihin_btw_sim_abs = self.chart_util.compute_within_between_similarity_absolute_for_dummy,
+            inputs = inputs,
+            labels = outputs
+        )
+
+    def add_run_train_data(self, 
+                           train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]],
+                           compute_witihin_btw_sim_avg: Callable[..., tuple[float, float, float]],
+                           compute_witihin_btw_sim_abs: Callable[..., tuple[dict[str, float], dict[str, float]]],
+                           **kwargs) :
         """{ model_name: { epoch_number: { layer_name: activations } } }"""
         for model_name, epoch_data in train_activations.items():
             model_analysis = self.get_or_create_model(model_name)
@@ -61,8 +86,8 @@ class MultiRunAnalysis:
                     # Compute similarities
                     num_inputs = activations.shape[0]
                     cosine_sim_matrix = self.chart_util.get_cosine_similarity_matrix(activations, num_inputs)
-                    within_sim, between_sim, complete_sim = self.chart_util.compute_within_between_similarity_avg(cosine_sim_matrix, num_inputs)
-                    within_sim_abs, between_sim_abs = self.chart_util.compute_within_between_similarity_absolute(cosine_sim_matrix)
+                    within_sim, between_sim, complete_sim = compute_witihin_btw_sim_avg(cosine_sim_matrix, num_inputs, **kwargs)
+                    within_sim_abs, between_sim_abs = compute_witihin_btw_sim_abs(cosine_sim_matrix, **kwargs)
                     
                     separation_value = 1 - between_sim
                     
@@ -80,6 +105,23 @@ class MultiRunAnalysis:
                         similarity_result=similarity_result,
                         activations=activations
                     )
+    
+    def add_run_train_data_xor(self, train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]]):
+        """{ model_name: { epoch_number: { layer_name: activations } } }"""
+        self.add_run_train_data(
+            train_activations,
+            compute_witihin_btw_sim_avg=self.chart_util.compute_within_between_similarity_avg_for_xor,
+            compute_witihin_btw_sim_abs=self.chart_util.compute_within_between_similarity_absolute_for_xor
+        )
+    def add_run_train_data_dummy(self, train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]], inputs: torch.Tensor, outputs: torch.Tensor):
+        """{ model_name: { epoch_number: { layer_name: activations } } }"""
+        self.add_run_train_data(
+            train_activations,
+            compute_witihin_btw_sim_avg = self.chart_util.compute_within_between_similarity_avg_for_dummy,
+            compute_witihin_btw_sim_abs = self.chart_util.compute_within_between_similarity_absolute_for_dummy,
+            inputs = inputs,
+            labels = outputs
+        )
     
     def generate_histogram_data(self, needIntegration: bool, 
                               model_names: Optional[List[str]] = None,

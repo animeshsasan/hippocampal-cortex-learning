@@ -1,6 +1,8 @@
 from typing import Callable
 from metrics.charts import ChartUtil
 from training.train import TrainUtil
+from utils.seedGenerator import generate_seeds
+import torch
 import torch.nn as nn
 
 
@@ -19,12 +21,25 @@ class RunExperiment():
                                model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)},
                                print_summary = False,
                                batch_train = False,
-                               random_sequencing = True) -> ChartUtil:
+                               random_sequencing = True,
+                               seed = 0,
+                               activation = nn.LeakyReLU(0.1),
+                               lr = 0.01) -> ChartUtil:
         chartUtil = ChartUtil()
         epoch_num = n_epochs
-        for _ in range(n_runs):
+        seeds = generate_seeds(seed, n_runs)
+
+        for i in range(n_runs):
+
+            torch.manual_seed(seeds[i])
+
             for modelName, get_model in models.items():
-                model = get_model(in_features = in_features, out_features = out_features, layers = layers, model_params = model_params)
+                model = get_model(
+                    in_features = in_features, 
+                    out_features = out_features,
+                    layers = layers, 
+                    model_params = model_params,
+                    activation = activation)
 
                 if ortho_lambda and "Ortho" in modelName:
                     loss_over_epochs, \
@@ -40,7 +55,8 @@ class RunExperiment():
                                                                                 print_msg = print_summary,
                                                                                 batch_train = batch_train,
                                                                                 ortho_lambda = ortho_lambda,
-                                                                                random_sequencing = random_sequencing)
+                                                                                random_sequencing = random_sequencing,
+                                                                                lr = lr)
 
                 else:
                     loss_over_epochs, \
@@ -55,7 +71,8 @@ class RunExperiment():
                                                                                 name = modelName,
                                                                                 print_msg = print_summary,
                                                                                 batch_train = batch_train,
-                                                                                random_sequencing = random_sequencing)
+                                                                                random_sequencing = random_sequencing,
+                                                                                lr = lr)
                 chartUtil.add_train_data(modelName, loss_over_epochs, train_accuracy_over_epochs, epoch_numbers, test_accuracy_over_epochs)
                 chartUtil.add_test_data(modelName, train_accuracy, val_accuracy)
         
@@ -72,12 +89,22 @@ class RunExperiment():
                      print_summary = False,
                      batch_train = False,
                      random_sequencing = True,
-                     return_train_acts = False):
+                     return_train_acts = False,
+                     seed = 0,
+                     activation = nn.LeakyReLU(0.1),
+                     lr = 0.01):
         modelsMap = {}
         trainActivationsMap = {}
         testActivationsMap = {}
+        seed = generate_seeds(seed, 1)
+        torch.manual_seed(seed[0])
         for modelName, get_model in models.items():
-            model = get_model(in_features = in_features, out_features = out_features, layers = layers, model_params = model_params)
+            model = get_model(
+                in_features = in_features, 
+                out_features = out_features, 
+                layers = layers, 
+                model_params = model_params,
+                activation = activation)
 
             if ortho_lambda and "Ortho" in modelName:
                 _ , _ ,_ , _, _, _, trainActivations, testActivations = self.trainUtil.train_and_evaluate(model, 
@@ -87,7 +114,8 @@ class RunExperiment():
                                                 batch_train = batch_train,
                                                 ortho_lambda = ortho_lambda,
                                                 random_sequencing = random_sequencing,
-                                                return_train_acts = return_train_acts)
+                                                return_train_acts = return_train_acts,
+                                                lr = lr)
 
             else:
                 _ , _ ,_ , _, _ , _, trainActivations, testActivations = self.trainUtil.train_and_evaluate(model, 
@@ -96,7 +124,8 @@ class RunExperiment():
                                                 print_msg = print_summary,
                                                 batch_train = batch_train,
                                                 random_sequencing = random_sequencing,
-                                                return_train_acts = return_train_acts)
+                                                return_train_acts = return_train_acts,
+                                                lr = lr)
                 
             modelsMap[modelName] = model
             trainActivationsMap[modelName] = trainActivations

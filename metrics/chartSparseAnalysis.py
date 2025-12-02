@@ -113,8 +113,8 @@ class ChartSparseUtil():
                         self.simmilarity_btw[modelName][layerName] = []
 
                     cosine_sim_matrix = self.get_cosine_similarity_matrix(acts, num_inputs)
-                    within_sim, between_sim = self.compute_within_between_similarity_avg(cosine_sim_matrix)
-                    within_sim_abs, between_sim_abs = self.compute_within_between_similarity_absolute(cosine_sim_matrix)
+                    within_sim, between_sim = self.compute_within_between_similarity_avg_for_xor(cosine_sim_matrix)
+                    within_sim_abs, between_sim_abs = self.compute_within_between_similarity_absolute_for_xor(cosine_sim_matrix)
 
                     separation = 1 - between_sim
                     
@@ -131,39 +131,76 @@ class ChartSparseUtil():
                 self.combined_simmilarity[key][subkey] = [
             {**i, **s} for i, s in zip(self.simmilarity_within[key][subkey], self.simmilarity_btw[key][subkey])
                 ]
-            
-    def compute_within_between_similarity_avg(self, sim_matrix, num_inputs):
+    def compute_within_between_similarity_avg(self, sim_matrix: np.ndarray, zero_categories: np.ndarray, one_categories: np.ndarray):
+        within = []
+        for i in range(len(zero_categories)):
+            for j in range(i + 1, len(zero_categories)):
+                within.append(sim_matrix[zero_categories[i], zero_categories[j]])
+        for i in range(len(one_categories)):
+            for j in range(i + 1, len(one_categories)):
+                within.append(sim_matrix[one_categories[i], one_categories[j]])
+
+        between = []
+        for i in range(len(zero_categories)):
+            for j in range(len(one_categories)):
+                between.append(sim_matrix[zero_categories[i], one_categories[j]])
+
+        complete = np.concat([within, between])
+        # within = [sim_matrix[0, 3], sim_matrix[1, 2]]
+        # between = [sim_matrix[0, 1], sim_matrix[0, 2], sim_matrix[1, 3], sim_matrix[2, 3]]
+        return np.mean(within), np.mean(between), np.mean(complete)
+           
+    def compute_within_between_similarity_avg_for_xor(self, sim_matrix, num_inputs):
             even_categories = np.arange(num_inputs/2, dtype=np.int32) * 2
             odd_categories = np.arange(num_inputs/2, dtype=np.int32) * 2 + 1
             if num_inputs % 2 == 1:
                 odd_categories = odd_categories[:-1]
             
-            within = []
-            for i in range(len(even_categories)):
-                for j in range(i + 1, len(even_categories)):
-                    within.append(sim_matrix[even_categories[i], even_categories[j]])
-            for i in range(len(odd_categories)):
-                for j in range(i + 1, len(odd_categories)):
-                    within.append(sim_matrix[odd_categories[i], odd_categories[j]])
-
-            between = []
-            for i in range(len(odd_categories)):
-                for j in range(len(even_categories)):
-                    between.append(sim_matrix[odd_categories[i], even_categories[j]])
-
-            complete = np.concat([within, between])
-            # within = [sim_matrix[0, 3], sim_matrix[1, 2]]
-            # between = [sim_matrix[0, 1], sim_matrix[0, 2], sim_matrix[1, 3], sim_matrix[2, 3]]
-            return np.mean(within), np.mean(between), np.mean(complete)
+            return self.compute_within_between_similarity_avg(sim_matrix, even_categories, odd_categories)
     
-    def compute_within_between_similarity_absolute(self, sim_matrix):
+    def compute_within_between_similarity_avg_for_dummy(self, sim_matrix: np.ndarray, num_inputs: int, inputs:torch.Tensor, labels: torch.Tensor):
+            zero_categories = torch.where(labels == 0)[0].numpy()
+            one_categories = torch.where(labels == 1)[0].numpy()
+            
+            return self.compute_within_between_similarity_avg(sim_matrix, zero_categories, one_categories)
+    
+    def compute_within_between_similarity_absolute_for_xor(self, sim_matrix):
         within = {"00-11":sim_matrix[0, 3], "01-10": sim_matrix[1, 2]}
         between = {"00-01": sim_matrix[0, 1], "00-10": sim_matrix[0, 2], "11-01": sim_matrix[1, 3],"11-10": sim_matrix[2, 3]}
         self.integration_labels_abs = ["00-11", "01-10"]
         self.separation_labels_abs = ["00-01", "00-10", "11-01", "11-10"]
         return within, between
+    
+    def compute_within_between_similarity_absolute_for_dummy(self, sim_matrix: np.ndarray, inputs: torch.Tensor, labels: torch.Tensor):
+        zero_categories = torch.where(labels == 0)[0].numpy()
+        one_categories = torch.where(labels == 1)[0].numpy()
+        self.integration_labels_abs =[]
+        self.separation_labels_abs = []
+        within = {}
+        for i in range(len(zero_categories)):
+            for j in range(i + 1, len(zero_categories)):
+                idx_1 = zero_categories[i]
+                idx_2 = zero_categories[j]
+                within[str(inputs[idx_1]) + "-" + str(inputs[idx_2])] = sim_matrix[idx_1, idx_2]
+                self.integration_labels_abs.append(str(inputs[idx_1]) + "-" + str(inputs[idx_2]))
+        for i in range(len(one_categories)):
+            for j in range(i + 1, len(one_categories)):
+                idx_1 = one_categories[i]
+                idx_2 = one_categories[j]
+                within[str(inputs[idx_1]) + "-" + str(inputs[idx_2])] = sim_matrix[idx_1, idx_2]
+                self.integration_labels_abs.append(str(inputs[idx_1]) + "-" + str(inputs[idx_2]))
 
-    def get_cosine_similarity_matrix(self, acts, num_inputs = 4):
+        between = {}
+        for i in range(len(zero_categories)):
+            for j in range(len(one_categories)):
+                idx_1 = zero_categories[i]
+                idx_2 = one_categories[j]
+                between[str(inputs[idx_1]) + "-" + str(inputs[idx_2])] = sim_matrix[idx_1, idx_2]
+                self.separation_labels_abs.append(str(inputs[idx_1]) + "-" + str(inputs[idx_2]))
+
+        return within, between
+
+    def get_cosine_similarity_matrix(self, acts, num_inputs = 4) -> np.ndarray:
         cosine_sim_matrix = torch.zeros((num_inputs, num_inputs))
         for i in range(num_inputs):
             for j in range(num_inputs):

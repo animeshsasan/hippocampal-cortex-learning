@@ -8,7 +8,8 @@ class ModelSetups():
                           in_features = 2,
                           out_features = 2, 
                           layers = 3, 
-                          model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)}) -> nn.Module:
+                          model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)},
+                          activation = nn.LeakyReLU(0.1)) -> nn.Module:
         assert layers == len(model_params.keys()), "Number of layers must match the length of model_params"
         class SparseModel(nn.Module):
             def __init__(self, in_features=in_features, out_features=out_features):
@@ -19,12 +20,12 @@ class ModelSetups():
                 # First layer: input → first hidden
                 prev_out = in_features
                 for layer_name, (hidden_size, out_allowed) in model_params.items():
-                    self.layers.append(CustomLayer(prev_out, hidden_size, out_features_allowed=out_allowed))
+                    self.layers.append(CustomLayer(prev_out, hidden_size, out_features_allowed=out_allowed, activation = activation))
                     prev_out = hidden_size
                     self.layer_names.append(layer_name)
 
                 # Final layer: last hidden → output
-                self.layers.append(CustomLayer(prev_out, out_features))
+                self.layers.append(CustomLayer(prev_out, out_features, activation = activation))
 
             def forward(self, x, return_acts=False):
                 activations = {}
@@ -41,7 +42,8 @@ class ModelSetups():
                            in_features = 2, 
                            out_features = 2, 
                            layers = 3, 
-                           model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)}) -> nn.Module:
+                           model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)},
+                           activation = nn.LeakyReLU(0.1)) -> nn.Module:
         assert layers == len(model_params.keys()), "Number of layers must match the length of model_params"
         class ControlModel(nn.Module):
             def __init__(self, in_features=in_features, out_features=out_features):
@@ -52,12 +54,12 @@ class ModelSetups():
                 # First layer: input → first hidden
                 prev_out = in_features
                 for layer_name, (_, out_allowed) in model_params.items():
-                    self.layers.append(CustomLayer(prev_out, out_allowed))
+                    self.layers.append(CustomLayer(prev_out, out_allowed, activation = activation))
                     prev_out = out_allowed
                     self.layer_names.append(layer_name)
 
                 # Final layer: last hidden → output
-                self.layers.append(CustomLayer(prev_out, out_features))
+                self.layers.append(CustomLayer(prev_out, out_features, activation = activation))
 
             def forward(self, x, return_acts=False):
                 activations = {}
@@ -74,7 +76,8 @@ class ModelSetups():
                          in_features = 2, 
                          out_features = 2, 
                          layers = 3, 
-                         model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)}) -> nn.Module:
+                         model_params: dict[str, tuple[int, int | None]] = {"l1": (200, 15), "l2": (250, 20), "l3": (200, 10)},
+                         activation = nn.LeakyReLU(0.1)) -> nn.Module:
         assert layers == len(model_params.keys()), "Number of layers must match the length of model_params"
         class DenseModel(nn.Module):
             def __init__(self, in_features=in_features, out_features=out_features):
@@ -85,12 +88,12 @@ class ModelSetups():
                 # First layer: input → first hidden
                 prev_out = in_features
                 for layer_name, (hidden_size, _) in model_params.items():
-                    self.layers.append(CustomLayer(prev_out, hidden_size))
+                    self.layers.append(CustomLayer(prev_out, hidden_size, activation = activation))
                     prev_out = hidden_size
                     self.layer_names.append(layer_name)
 
                 # Final layer: last hidden → output
-                self.layers.append(CustomLayer(prev_out, out_features))
+                self.layers.append(CustomLayer(prev_out, out_features, activation = activation))
 
             def forward(self, x, return_acts=False):
                 activations = {}

@@ -124,10 +124,11 @@ class TrainUtil():
                            print_msg = False, 
                            batch_train = False,
                            random_sequencing = True,
-                           return_train_acts = False
+                           return_train_acts = False,
+                           lr = 0.01
                            ):
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.01)
+        optimizer = optim.Adam(model.parameters(), lr=lr)
         loss_over_epochs, \
             accuracy_over_epochs, \
                 epoch_number, \

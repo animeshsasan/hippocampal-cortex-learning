@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats # type: ignore[import]
+from metrics.bootstrapUtils import get_bootstrapped_value
 from models.enums.similarityType import AbsSimilarityType
 from models.modelAnalysis.layerAnalysis import LayerAnalysis
 from models.modelAnalysis.multiRunAnalysis import MultiRunAnalysis
@@ -123,8 +124,19 @@ class ModelAnalysisUtils():
             sem = stats.sem(values, nan_policy='omit')
             ci = 1.96 * sem
             return mean_similarity, ci
+        
+    def _calculate_mean_and_bt(self, values: List[float]) -> Tuple[float, float, float]:
+        """Calculate mean and 95% CI for a list of values"""
+        if len(values) == 0:
+            return 0.0, 0.0, 0.0
+        elif len(values) == 1:
+            return float(values[0]), 0.0, 0.0
+        else:
+            mean_similarity = float(np.mean(values))
+            low, high = get_bootstrapped_value(values)
+            return mean_similarity, low, high
 
-    def create_test_int_sep_df_multi_run(self, analysis: MultiRunAnalysis, needIntegration: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def create_test_int_sep_df_multi_run(self, analysis: MultiRunAnalysis, needWithin: bool = True, needBootstrapped = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
         similarity_data: dict[str, dict[str, float]] = {}
         ci_data: dict[str, dict[str, float]] = {}
 
@@ -133,8 +145,11 @@ class ModelAnalysisUtils():
             ci_data[model_name] = {}
             for layer_name, layer_analysis in model_analysis.test_analysis.items():
                 # Get mean complete similarity across all runs
-                int_sep_values = layer_analysis.integration_values if needIntegration else layer_analysis.separation_values
-                mean_similarity, ci = self._calculate_mean_and_ci(int_sep_values)
+                within_btw_values = layer_analysis.integration_values if needWithin else [ 1 - val for val in layer_analysis.separation_values]
+                # if needBootstrapped:
+                #     # mean_similarity, l_b, u_b = self._calculate_mean_and_bt(within_btw_values, needBootstrapped=True)
+                # else:
+                mean_similarity, ci = self._calculate_mean_and_ci(within_btw_values)
 
                 similarity_data[model_name][layer_name] = mean_similarity
                 ci_data[model_name][layer_name] = ci
@@ -142,6 +157,9 @@ class ModelAnalysisUtils():
         # Convert to DataFrame (this matches your original format)
         df_mean = pd.DataFrame(similarity_data).T
         df_ci = pd.DataFrame(ci_data).T
+
+        df_mean = df_mean.reset_index().rename(columns={"index": "Model"})
+        df_ci = df_ci.reset_index().rename(columns={"index": "Model"})
 
         return df_mean, df_ci
 
@@ -183,6 +201,28 @@ class ModelAnalysisUtils():
                             "Condition": cond,
                             "Value": value,
                             "Epoch": epoch
+                        })
+
+        df = pd.DataFrame(records)
+
+        return df
+    
+    def create_train_avg_sim_graph(self, analysis: MultiRunAnalysis, needWithin = True) -> pd.DataFrame:
+        records = []
+
+        for model_name, model_analysis in analysis.models.items():
+            epoch_numbers = model_analysis.get_epoch_numbers()
+            for epoch in epoch_numbers:
+                epoch_analysis = model_analysis.train_analysis[epoch]
+                for layer_name, layer_analysis in epoch_analysis.layers.items():
+                    abs_similarity = layer_analysis.get_integration_values() if needWithin else [ 1 - val for val in layer_analysis.get_separation_values()]
+                    for value in abs_similarity:
+                        records.append({
+                            "Model": model_name,
+                            "Layer": layer_name,
+                            "Value": value,
+                            "Epoch": epoch,
+                            "Condition": "Within" if needWithin else "Between"
                         })
 
         df = pd.DataFrame(records)
