@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Dict, List, Tuple
+import typing
 import numpy as np
 import pandas as pd
 from scipy import stats # type: ignore[import]
@@ -37,20 +38,27 @@ class ModelAnalysisUtils():
         df_ci = pd.DataFrame(ci_data).T
 
         return df_mean, df_ci
-    
-    def create_train_similarity_complete_df_multi_run(self, analysis: MultiRunAnalysis) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+
+    def create_train_similarity_complete_df_multi_run(self, analysis: MultiRunAnalysis, needBootstrapped: bool = False) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
         # Training data (line plots) - structure: {model_name: {layer_name: {epoch: mean_value}}}
+        if needBootstrapped:
+            return self._create_train_similarity_df_with_bt_multi_run(analysis, AvgSimilarityValues.COMPLETE)
         return self._create_train_similarity_df_multi_run(analysis, AvgSimilarityValues.COMPLETE)
     
-    def create_train_int_sep_df_multi_run(self, analysis: MultiRunAnalysis, needIntegration: bool = True) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+    def create_train_int_sep_df_multi_run(self, analysis: MultiRunAnalysis, needIntegration: bool = True, needBootstrapped: bool = False) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
         valueNeeded = AvgSimilarityValues.INTEGRATION if needIntegration else AvgSimilarityValues.SEPARATION
-
+        if needBootstrapped:
+            return self._create_train_similarity_df_with_bt_multi_run(analysis, valueNeeded)
         return self._create_train_similarity_df_multi_run(analysis, valueNeeded)
     
-    def _create_train_similarity_df_multi_run(self, analysis: MultiRunAnalysis, valueType: AvgSimilarityValues) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+    def _create_train_similarity_df_multi_run_loop(self, 
+                                                   analysis: MultiRunAnalysis, 
+                                                   valueType: AvgSimilarityValues,
+                                                   calculate_mean_ci: typing.Callable[[list[float]], tuple[float, float | tuple[float, float]]]
+                                                   ) -> tuple[dict[str, dict[str, dict[int, float]]], dict[str, dict[str, dict[int, float | tuple[float, float]]]]]:
         # Training data (line plots) - structure: {model_name: {layer_name: {epoch: mean_value}}}
         train_similarity_data: dict[str, dict[str, dict[int, float]]] = {}
-        train_ci_data: dict[str, dict[str, dict[int, float]]] = {}
+        train_ci_data: dict[str, dict[str, dict[int, float | tuple[float, float]]]] = {}
 
         for model_name, model_analysis in analysis.models.items():
             train_similarity_data[model_name] = {}
@@ -65,13 +73,26 @@ class ModelAnalysisUtils():
                         train_ci_data[model_name][layer_name] = {}
                     
                     complete_similarities = self._get_values_from_layer(layer_analysis, valueType)
-                    mean_similarity, ci = self._calculate_mean_and_ci(complete_similarities)
+                    mean_similarity, ci = calculate_mean_ci(complete_similarities)
                     
                     train_similarity_data[model_name][layer_name][epoch] = mean_similarity
                     train_ci_data[model_name][layer_name][epoch] = ci
 
 
+        return train_similarity_data, train_ci_data
+    
+    def _create_train_similarity_df_multi_run(self, analysis: MultiRunAnalysis, valueType: AvgSimilarityValues) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+        # Training data (line plots) - structure: {model_name: {layer_name: {epoch: mean_value}}}
+        train_similarity_data, train_ci_data = self._create_train_similarity_df_multi_run_loop(analysis, valueType, self._calculate_mean_and_ci)
+
+
         return self._convert_train_data_to_dataframes(train_similarity_data, train_ci_data)
+    
+    def _create_train_similarity_df_with_bt_multi_run(self, analysis: MultiRunAnalysis, valueType: AvgSimilarityValues) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+        # Training data (line plots) - structure: {model_name: {layer_name: {epoch: mean_value}}}
+        train_similarity_data, train_ci_data = self._create_train_similarity_df_multi_run_loop(analysis, valueType, self._calculate_mean_and_bt)
+
+        return self._convert_bt_train_data_to_dataframes(train_similarity_data, train_ci_data)
     
     def _get_values_from_layer(self, layer_analysis: LayerAnalysis, valueType: AvgSimilarityValues) -> List[float]:
         if valueType == AvgSimilarityValues.INTEGRATION:
@@ -81,7 +102,7 @@ class ModelAnalysisUtils():
         elif valueType == AvgSimilarityValues.COMPLETE:
             return layer_analysis.get_complete_similarity_values()
     
-    def _convert_train_data_to_dataframes(self, train_similarity_data: dict, train_ci_data: dict) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+    def _convert_train_data_to_dataframes_loop(self, train_similarity_data: dict[str, dict[str, dict[int, float]]], train_ci_data: dict, get_ci: typing.Callable[[str, str, list[int], dict], pd.DataFrame]) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
         """
         Convert training data to a nested dictionary of DataFrames
         Returns: {model_name: {layer_name: (df_mean, df_ci)}}
@@ -96,7 +117,6 @@ class ModelAnalysisUtils():
                 
                 # Extract mean values and CI values in epoch order
                 mean_values = [epoch_data[epoch] for epoch in epochs]
-                ci_values = [train_ci_data[model_name][layer_name][epoch] for epoch in epochs]
                 
                 # Create DataFrames
                 df_mean = pd.DataFrame({
@@ -104,14 +124,43 @@ class ModelAnalysisUtils():
                     'similarity': mean_values
                 }).set_index('epoch')
                 
-                df_ci = pd.DataFrame({
-                    'epoch': epochs,
-                    'ci': ci_values
-                }).set_index('epoch')
+                df_ci = get_ci(model_name, layer_name, epochs, train_ci_data)
                 
                 train_dfs[model_name][layer_name] = (df_mean, df_ci)
         
         return train_dfs
+    
+    def _convert_train_data_to_dataframes(self, train_similarity_data: dict, train_ci_data: dict) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+        """
+        Convert training data to a nested dictionary of DataFrames
+        Returns: {model_name: {layer_name: (df_mean, df_ci)}}
+        """
+        def get_ci(model_name: str, layer_name: str, epochs: list[int], ci_data: dict) -> pd.DataFrame:
+            ci_values = [ci_data[model_name][layer_name][epoch] for epoch in epochs]
+            df_ci = pd.DataFrame({
+                'epoch': epochs,
+                'ci': ci_values
+            }).set_index('epoch')
+            return df_ci
+        
+        return self._convert_train_data_to_dataframes_loop(train_similarity_data, train_ci_data, get_ci)
+    
+    def _convert_bt_train_data_to_dataframes(self, train_similarity_data: dict, train_ci_data: dict) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
+        """
+        Convert training data to a nested dictionary of DataFrames
+        Returns: {model_name: {layer_name: (df_mean, df_ci)}}
+        """
+        def get_ci(model_name: str, layer_name: str, epochs: list[int], ci_data: dict) -> pd.DataFrame:
+            lb_values = [ci_data[model_name][layer_name][epoch][0] for epoch in epochs]
+            ub_values = [ci_data[model_name][layer_name][epoch][1] for epoch in epochs]
+            df_ci = pd.DataFrame({
+                'epoch': epochs,
+                'ci_low': lb_values,
+                'ci_up': ub_values
+            }).set_index('epoch')
+            return df_ci
+        
+        return self._convert_train_data_to_dataframes_loop(train_similarity_data, train_ci_data, get_ci)
 
     def _calculate_mean_and_ci(self, values: List[float]) -> Tuple[float, float]:
         """Calculate mean and 95% CI for a list of values"""
@@ -124,17 +173,17 @@ class ModelAnalysisUtils():
             sem = stats.sem(values, nan_policy='omit')
             ci = 1.96 * sem
             return mean_similarity, ci
-        
-    def _calculate_mean_and_bt(self, values: List[float]) -> Tuple[float, float, float]:
+
+    def _calculate_mean_and_bt(self, values: List[float]) -> Tuple[float, Tuple[float, float]]:
         """Calculate mean and 95% CI for a list of values"""
         if len(values) == 0:
-            return 0.0, 0.0, 0.0
+            return 0.0, (0.0, 0.0)
         elif len(values) == 1:
-            return float(values[0]), 0.0, 0.0
+            return float(values[0]), (0.0, 0.0)
         else:
             mean_similarity = float(np.mean(values))
             low, high = get_bootstrapped_value(values)
-            return mean_similarity, low, high
+            return mean_similarity, (low, high)
 
     def create_test_int_sep_df_multi_run(self, analysis: MultiRunAnalysis, needWithin: bool = True, needBootstrapped = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
         similarity_data: dict[str, dict[str, float]] = {}

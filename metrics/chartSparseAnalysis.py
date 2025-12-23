@@ -136,6 +136,7 @@ class ChartSparseUtil():
         for i in range(len(zero_categories)):
             for j in range(i + 1, len(zero_categories)):
                 within.append(sim_matrix[zero_categories[i], zero_categories[j]])
+        
         for i in range(len(one_categories)):
             for j in range(i + 1, len(one_categories)):
                 within.append(sim_matrix[one_categories[i], one_categories[j]])
