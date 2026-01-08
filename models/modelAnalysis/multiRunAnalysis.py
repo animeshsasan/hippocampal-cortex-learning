@@ -3,11 +3,14 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 from numpy import ndarray
+import numpy as np
 import torch
 
 from metrics.chartSparseAnalysis import ChartSparseUtil
 from models.modelAnalysis.modelAnalysis import ModelAnalysis
 from models.modelAnalysis.similarityResult import SimilarityResult
+
+from skdim.id import lPCA # type: ignore[import]
 
 
 @dataclass
@@ -48,13 +51,16 @@ class MultiRunAnalysis:
                     within_similarity_absolute=within_sim_abs,
                     between_similarity_absolute=between_sim_abs
                 )
+
+                participation_ratio = self.compute_pr_from_dict(activations)
                 
                 model_analysis.add_test_run(
                     layer_name=layer_name,
                     integration=within_sim,
                     separation=separation_value,
                     similarity_result=similarity_result,
-                    activations=activations
+                    activations=activations,
+                    participation_ratio=participation_ratio
                 )
 
     def add_run_test_data_xor(self, test_activations: Dict[str, Dict[str, torch.Tensor]]):
@@ -72,6 +78,20 @@ class MultiRunAnalysis:
             inputs = inputs,
             labels = outputs
         )
+    
+    def compute_pr_from_dict(self, acts: torch.Tensor, acts_for_centering: torch.Tensor | None = None) -> float:
+        assert acts.shape[1] == acts_for_centering.shape[1] if acts_for_centering is not None else True
+
+        pr_estimator = lPCA(ver='participation_ratio')
+
+        X = acts.detach().cpu().numpy()
+        if acts_for_centering is not None:
+            X_centering = acts_for_centering.detach().cpu().numpy()
+            X = X - X_centering.mean(axis=0, keepdims=True) # Centering the data
+        else:
+            X = X - X.mean(axis=0, keepdims=True) # Centering the data
+
+        return pr_estimator.fit_transform(X)
 
     def add_run_train_data(self, 
                            train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]],
@@ -79,6 +99,7 @@ class MultiRunAnalysis:
                            compute_witihin_btw_sim_abs: Callable[..., tuple[dict[str, float], dict[str, float]]],
                            **kwargs) :
         """{ model_name: { epoch_number: { layer_name: activations } } }"""
+        centering_activations = kwargs.pop("centering_activations", None)
         for model_name, epoch_data in train_activations.items():
             model_analysis = self.get_or_create_model(model_name)
             for epoch_number, layer_data in epoch_data.items():
@@ -96,14 +117,16 @@ class MultiRunAnalysis:
                         within_similarity_absolute=within_sim_abs,
                         between_similarity_absolute=between_sim_abs
                     )
-                    
+                    pr = self.compute_pr_from_dict(activations, centering_activations[model_name][epoch_number][layer_name] if centering_activations is not None else None)
+
                     model_analysis.add_train_run(
                         epoch_number=epoch_number,
                         layer_name=layer_name,
                         integration=within_sim,
                         separation=separation_value,
                         similarity_result=similarity_result,
-                        activations=activations
+                        activations=activations,
+                        participation_ratio = pr
                     )
     
     def add_run_train_data_xor(self, train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]]):
@@ -113,14 +136,15 @@ class MultiRunAnalysis:
             compute_witihin_btw_sim_avg=self.chart_util.compute_within_between_similarity_avg_for_xor,
             compute_witihin_btw_sim_abs=self.chart_util.compute_within_between_similarity_absolute_for_xor
         )
-    def add_run_train_data_dummy(self, train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]], inputs: torch.Tensor, outputs: torch.Tensor):
+    def add_run_train_data_dummy(self, train_activations: Dict[str, Dict[int, Dict[str, torch.Tensor]]], inputs: torch.Tensor, outputs: torch.Tensor, centering_activations: Optional[Dict[str, Dict[str, torch.Tensor]]] = None):
         """{ model_name: { epoch_number: { layer_name: activations } } }"""
         self.add_run_train_data(
             train_activations,
             compute_witihin_btw_sim_avg = self.chart_util.compute_within_between_similarity_avg_for_dummy,
             compute_witihin_btw_sim_abs = self.chart_util.compute_within_between_similarity_absolute_for_dummy,
             inputs = inputs,
-            labels = outputs
+            labels = outputs,
+            centering_activations = centering_activations
         )
     
     def generate_histogram_data(self, needIntegration: bool, 

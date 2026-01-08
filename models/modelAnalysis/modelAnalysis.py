@@ -30,9 +30,10 @@ class ModelAnalysis:
                       integration: float, 
                       separation: float, 
                       similarity_result: SimilarityResult,
-                      activations: torch.Tensor):
+                      activations: torch.Tensor,
+                      participation_ratio: float):
         layer_analysis = self.get_or_create_layer(layer_name)
-        layer_analysis.add_run(integration, separation, similarity_result, activations)
+        layer_analysis.add_run(integration, separation, similarity_result, activations, participation_ratio)
     
     def add_train_run(self, 
                       epoch_number: int,
@@ -40,9 +41,10 @@ class ModelAnalysis:
                       integration: float, 
                       separation: float, 
                       similarity_result: SimilarityResult,
-                      activations: torch.Tensor):
+                      activations: torch.Tensor,
+                      participation_ratio: float):
         epoch_analysis = self.get_or_create_epoch(epoch_number)
-        epoch_analysis.add_layer_run(layer_name, integration, separation, similarity_result, activations)
-    
+        epoch_analysis.add_layer_run(layer_name, integration, separation, similarity_result, activations, participation_ratio)
+
     def get_epoch_numbers(self) -> List[int]:
         return sorted(self.train_analysis.keys())

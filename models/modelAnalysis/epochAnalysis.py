@@ -23,6 +23,7 @@ class EpochAnalysis:
                       integration: float, 
                       separation: float, 
                       similarity_result: SimilarityResult,
-                      activations: torch.Tensor):
+                      activations: torch.Tensor,
+                      participation_ratio: float):
         layer_analysis = self.get_or_create_layer(layer_name)
-        layer_analysis.add_run(integration, separation, similarity_result, activations)
+        layer_analysis.add_run(integration, separation, similarity_result, activations, participation_ratio)

@@ -15,16 +15,19 @@ class LayerAnalysis:
     separation_values: List[float] = field(default_factory=list)
     similarity_results: List[SimilarityResult] = field(default_factory=list)
     activation_values: List[torch.Tensor] = field(default_factory=list)
+    participation_ratios: List[float] = field(default_factory=list)
     
     def add_run(self, 
                 integration: float, 
                 separation: float, 
                 similarity_result: SimilarityResult, 
-                activation: torch.Tensor):
+                activation: torch.Tensor,
+                pr: float):
         self.integration_values.append(integration)
         self.separation_values.append(separation)
         self.similarity_results.append(similarity_result)
         self.activation_values.append(activation)
+        self.participation_ratios.append(pr)
     
     def get_integration_mean_std(self) -> Tuple[np.float32, np.float32]:
         return np.mean(self.integration_values), np.std(self.integration_values)
@@ -47,3 +50,6 @@ class LayerAnalysis:
     
     def get_separation_values(self) -> List[float]:
         return self.separation_values
+    
+    def get_pr_values(self) -> List[float]:
+        return self.participation_ratios
