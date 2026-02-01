@@ -120,6 +120,38 @@ class ModelAnalysisUtils():
 
         return train_pr_data, train_ci_data
     
+    def create_train_pr_df_multi_run_separate(self, analysis: MultiRunAnalysis) -> dict[str, dict[str, pd.DataFrame]]:
+        train_pr_data: dict[str, dict[str, pd.DataFrame]] = {}
+
+        for model_name, model_analysis in analysis.models.items():
+            train_pr_data[model_name] = {}
+
+            epoch_numbers = model_analysis.get_epoch_numbers()
+
+            for epoch in epoch_numbers:
+                epoch_analysis = model_analysis.train_analysis[epoch]
+
+                for layer_name, layer_analysis in epoch_analysis.layers.items():
+                    pr_values = layer_analysis.get_pr_values()  # list/array of runs
+
+                    # initialize dataframe for this model/layer the first time we see it
+                    if layer_name not in train_pr_data[model_name]:
+                        run_cols = [f"run_{i}" for i in range(len(pr_values))]
+                        train_pr_data[model_name][layer_name] = pd.DataFrame(columns=run_cols)
+
+                    # store this epoch’s PR values (one value per run)
+                    train_pr_data[model_name][layer_name].loc[epoch] = pr_values
+
+            # optional: sort by epoch just to be safe
+            for layer_name in train_pr_data[model_name]:
+                train_pr_data[model_name][layer_name] = (
+                    train_pr_data[model_name][layer_name]
+                    .sort_index()
+                    .astype(float)
+                )
+
+        return train_pr_data
+    
     def _create_train_similarity_df_multi_run(self, analysis: MultiRunAnalysis, valueType: AvgSimilarityValues) -> Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]]:
         # Training data (line plots) - structure: {model_name: {layer_name: {epoch: mean_value}}}
         train_similarity_data, train_ci_data = self._create_train_similarity_df_multi_run_loop(analysis, valueType, self._calculate_mean_and_ci)

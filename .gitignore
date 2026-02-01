@@ -2,3 +2,4 @@
 .mypy*
 __pycache__
 outputs
+images
