@@ -3,3 +3,5 @@
 __pycache__
 outputs
 images
+images/*
+*.DS_Store
