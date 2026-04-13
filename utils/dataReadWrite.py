@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -25,6 +26,12 @@ class StoreData():
         
         df.to_csv(csv_path, index=False)
 
+    def pad_to_same_length(self, a, b):
+        max_len = max(len(a), len(b))
+        a = list(a) + [None] * (max_len - len(a))
+        b = list(b) + [None] * (max_len - len(b))
+        return a, b
+
     def store_experiment_data(
             self,
             experiment: ExperimentResults,
@@ -39,16 +46,23 @@ class StoreData():
             final_val_mean, final_val_bt_l, final_val_bt_h = experiment.test_data[modelName].get_val_mean_bootstrapped()
             
             # Build a DF for this model
+            # print(modelName, len(epochs), len(mean_acc), len(bt_ls), len(bt_us))
             df_train = pd.DataFrame({
                 "epoch": epochs,
                 "mean_acc": np.array(mean_acc),
                 "bt_l": np.array(bt_ls),
                 "bt_u": np.array(bt_us),
             })
+            e90, e95 = self.pad_to_same_length(
+                epochs_to_threshold[90.],
+                epochs_to_threshold[95.]
+            )
+
             df_thr_per_rn = pd.DataFrame({
-                "epochs_to_90": epochs_to_threshold[90.],
-                "epochs_to_95": epochs_to_threshold[95.],
+                "epochs_to_90": e90,
+                "epochs_to_95": e95,
             })
+            # print(len(final_train_mean), len(final_train_bt_l), len(final_train_bt_h), len(final_val_mean), len(final_val_bt_l), len(final_val_bt_h))
             df_test = pd.DataFrame({
                 "final_train_mean": final_train_mean,
                 "final_train_bt_l": final_train_bt_l,
@@ -61,3 +75,36 @@ class StoreData():
             self.store_df(df_train, file_path + f"/train/{modelName}")
             self.store_df(df_thr_per_rn, file_path + f"/train/epochs_to_thr/{modelName}")
             self.store_df(df_test, file_path + f"/test/{modelName}")
+
+    def store_train_similarity_complete_multi_run(
+        self,
+        similarity_data: Dict[str, Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]],
+        file_path: str,
+        needBootstrapped: bool = False
+    ):
+        """
+        Stores similarity data from create_train_similarity_complete_df_multi_run.
+
+        Structure:
+        similarity_data = {
+            model_name: {
+                layer_name: (mean_df, bt_df)
+            }
+        }
+        """
+
+        for model_name, layer_dict in similarity_data.items():
+            for layer_name, (df_mean, df_bt) in layer_dict.items():
+
+                # Store mean similarity DF
+                self.store_df(
+                    df_mean,
+                    f"{file_path}/train_similarity/{model_name}/{layer_name}/mean"
+                )
+
+                # Store bootstrapped DF if needed
+                if needBootstrapped and df_bt is not None:
+                    self.store_df(
+                        df_bt,
+                        f"{file_path}/train_similarity/{model_name}/{layer_name}/bootstrapped"
+                    )

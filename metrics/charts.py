@@ -28,7 +28,7 @@ class ChartUtil():
         # Scale figure size based on number of legend entries
         base_width, base_height = 8, 6
         extra_height = min(max(0, (n_models - 5) * height_alpha), 50)  # grow with many models
-        extra_width = min(max(0, (n_models - 5) * width_alpha), 100)  # grow with many models
+        extra_width = min(max(0, (n_models - 5) * width_alpha), 150)  # grow with many models
         
         return plt.subplots(figsize=(base_width + extra_width, base_height + extra_height))
     
@@ -195,7 +195,17 @@ class ChartUtil():
         model_test_data = self.results.get_or_create_test_model(model)
         model_test_data.add_test_data(train_accuracy, val_accuracy)
 
-    def plot_test_accu_for_models(self, models = None, width_alpha = 1, no_std = False):
+    def plot_test_accu_for_models(self, 
+                                  models = None, 
+                                  width_alpha = 1, 
+                                  no_std = False, 
+                                  ax = None, 
+                                  fontsize = 12, 
+                                  title_fontsize = 14, 
+                                  label_width = 12,
+                                  colorToModel = None,
+                                  markersize = 10,
+                                  getBootstrap = False):
 
         model_name = []
         tr_mean = []
@@ -208,25 +218,64 @@ class ChartUtil():
                 continue
            
             model_name.append(model)
+            if getBootstrap:
+                train_mean, bt_l, bt_h = model_data.get_train_mean_bootstrapped()
+                tr_mean.append(train_mean)
+                tr_variance.append(([train_mean - bt_l], [bt_h - train_mean])) 
+                val_mean, bt_l, bt_h = model_data.get_val_mean_bootstrapped()
+                t_mean.append(val_mean)   
+                t_variance.append(([val_mean - bt_l], [bt_h - val_mean]))
+                continue
             train_mean, train_std = model_data.get_train_mean_std()
             val_mean, val_std = model_data.get_val_mean_std()
             tr_mean.append(train_mean)
             t_mean.append(val_mean)
             tr_variance.append(train_std)    
             t_variance.append(val_std)
-
-        fig, ax = self.get_plot(models, width_alpha=width_alpha)
-
-        if no_std:
-            ax.plot(model_name, tr_mean, 'ro', label="Train Accuracy")
-            ax.plot(model_name, t_mean, 'go', label="Val Accuracy")
+        if ax:
+            fig = ax.figure
         else:
-            ax.errorbar(model_name, tr_mean, tr_variance, color='r', fmt='o', label="Train Accuracy")    
-            ax.errorbar(model_name, t_mean, t_variance, color='g', fmt='o', label="Val Accuracy")    
-        ax.set_xlabel("Model")
-        ax.set_ylabel("Accuracy")
-        ax.legend()
-        ax.set_title("Post-training accuracy")
+            fig, ax = self.get_plot(models, width_alpha=width_alpha)
+        wrapped_names = [self.get_wrapped_name(name, label_width) for name in model_name]
+        for i, name in enumerate(model_name):
+            color = colorToModel[name] if colorToModel and name in colorToModel else 'g'
+            if no_std:
+                ax.plot(wrapped_names[i], 
+                        tr_mean[i], 
+                        markerfacecolor='none', 
+                        markeredgecolor=color,
+                        ecolor=color, 
+                        label="Train Accuracy" if i == 0 else None)
+                ax.plot(wrapped_names[i], 
+                        t_mean[i], 
+                        markerfacecolor=color, 
+                        markeredgecolor=color, 
+                        label="Test Accuracy" if i == 0 else None)
+            else:
+                ax.errorbar(wrapped_names[i], 
+                            tr_mean[i],
+                            tr_variance[i], 
+                            markerfacecolor='none', 
+                            markeredgecolor=color,
+                            ecolor=color,
+                            markersize=markersize,     
+                            markeredgewidth=1,
+                            fmt='o', 
+                            label="Train Accuracy" if i == 0 else None)    
+                ax.errorbar(wrapped_names[i], 
+                            t_mean[i], 
+                            t_variance[i], 
+                            markerfacecolor=color, 
+                            markeredgecolor=color,
+                            ecolor=color,
+                            markersize=markersize,     
+                            markeredgewidth=1,
+                            fmt='o', 
+                            label="Test Accuracy" if i == 0 else None)    
+        ax.set_xlabel("Model", fontsize=fontsize)
+        ax.set_ylabel("Accuracy", fontsize=fontsize)
+        ax.legend(fontsize=fontsize)
+        ax.set_title("Post-training accuracy", fontsize=title_fontsize)
 
         return fig
     
@@ -327,7 +376,6 @@ class ChartUtil():
                 model_name.append(model)
 
             mean, bt_l, bt_h = model_data.get_epochs_to_thr_mean_bt(model, thrs)
-
             for thr in thrs:
                 means[thr].append(mean[thr])
                 bt_ls[thr].append(bt_l[thr])
@@ -361,7 +409,7 @@ class ChartUtil():
                         means[thr][i],
                         yerr=[[err_lower], [err_upper]],
                         fmt='o',
-                        markersize=6,     
+                        markersize=20,     
                         markeredgewidth=1,
                         markeredgecolor=modelToColor[name],  # marker edge
                         markerfacecolor=modelToColor[name],  # marker fill (this was missing!)
